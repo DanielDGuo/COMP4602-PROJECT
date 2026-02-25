@@ -82,6 +82,55 @@ def fetch_alt_form_pokemon(pokemon_id):
         #pokemon doesn't exist, return an error message
         raise re.exceptions.HTTPError("PokemonAPI endpoint not found. Name error. Error " + str(response.status_code))
 
+#fetches moves by ID. Ignores moves with no power
+#fetch all valid moves first -> if a pokemon uses a move not in the list of fetched moves, the move must be invalid.
+#ignore healing effects
+#list of moves that should exist are here: https://bulbapedia.bulbagarden.net/wiki/List_of_moves_that_do_damage
+def fetch_move(move_id):
+    if int(move_id) < 1 or int(move_id) > 919:
+        raise ValueError("Move ID must be between 1 and 919(Move 920 - 'Nihil Light' is not in PokeAPI.).")
+    #fetch URL
+    url = f"{base_url}/move/{move_id}"
+    #create the cache directory for pokemon
+    os.makedirs(os.path.join(CACHE_DIR, "move_by_id"), exist_ok=True)
+
+    #set the path for the json file
+    path = os.path.join(CACHE_DIR, "move_by_id", "move_" + move_id + ".json")
+
+    #if it exists, it's been fetched before. Get the file from the cache instead of making an API request
+    if os.path.exists(path):
+        with open(path) as f:
+            print("file found in cache")
+            return json.load(f)
+
+    #make an API request for the pokemon
+    print("file fetched")
+    response = re.get(url)
+
+    if response.status_code == 200:
+        #format the data before dumping it into the file
+        data = response.json()
+        if data["power"] == None:
+            # some moves that do deal damage have weird damage calculations. They do NOT appear in the list.
+            valid_null_power_moves = ["electro-ball", "frustration", "grass-knot", "gyro-ball", "heat-crash", "heavy-slam", "low-kick", "return"]
+            if data["name"] not in valid_null_power_moves:
+                print("Move " + move_id + " has no power and does not have a scaling power.")
+                return
+        if data["damage_class"]["name"] == "status":
+                print("Move " + move_id + " is a status move.")
+                return
+
+        remove_keys = ["contest_combos", "contest_type", "contest_effect", "effect_changes", "generation", "learned_by_pokemon", "flavor_text_entries", "machines", "names", "past_values", "super_contest_effect"]
+        for key in remove_keys:
+            data.pop(key, None)
+
+        with open(path, "w") as f:
+            json.dump(data, f, indent=4)
+        return data
+    else:
+        #move id doesn't exist, return an error message
+        raise re.exceptions.HTTPError("PokemonAPI endpoint not found. Name error. Error " + str(response.status_code))
+
 
 #get stats at lv100
 #returns a dict
@@ -109,6 +158,8 @@ def calculate_stats(pokemon_id):
 if __name__ == "__main__":
     #fetch all 1025 pokemon with ids 1 to 1025
     print(calculate_stats("1"))
+    for x in range(1, 919):
+        fetch_move(str(x))
     #diancie
     # fetch_pokemon("719")
     #fetch alternate forms with ids 10001 to 10325
