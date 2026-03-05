@@ -283,7 +283,12 @@ def fetch_move(move_id):
         #format the data before dumping it into the file
         data = response.json()
         if data["power"] == None:
+            #ignore status moves
+            if data["damage_class"]["name"] == "status":
+                    print("Move " + move_id + " is a status move.")
+                    return -1
             # some moves that do deal damage have weird damage calculations. They do NOT appear in the list.
+            # WIP - change to match case and use all moves in here
             valid_null_power_moves = ["electro-ball", "frustration", "grass-knot", "gyro-ball", "heat-crash", "heavy-slam", "low-kick", "return"]
             if data["name"] not in valid_null_power_moves:
                 print("Move " + move_id + " has no power and does not have a scaling power.")
@@ -291,9 +296,6 @@ def fetch_move(move_id):
             else:
                 if data["name"] == "frustration" or data["name"] == "return":
                     data["power"] = 102
-        if data["damage_class"]["name"] == "status":
-                print("Move " + move_id + " is a status move.")
-                return -1
         if data["accuracy"] == None:
             data["accuracy"] = 100
         
@@ -462,7 +464,7 @@ def calculate_damage(pokemon1_id, pokemon2_id):
 
 if __name__ == "__main__":
     #fetch all 1025 pokemon with ids 1 to 1025
-    calculate_damage("3", "6")
+    calculate_damage("389", "9")
     #diancie
     # fetch_pokemon("719")
     #fetch alternate forms with ids 10001 to 10325
