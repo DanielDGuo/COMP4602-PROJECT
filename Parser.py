@@ -1,4 +1,3 @@
-import damage_calculator as dcalc
 import requests as re
 import json, os
 
@@ -164,6 +163,14 @@ type_effectiveness = {
     }
 }
 
+
+#taken from the damage_calculator github. Function not exposed in libary
+#uses int division like in the game.
+def calculate_move_damage(level, attack, defense, power, type_effectiveness, stab):
+    level_factor = (2 * level) // 5 + 2
+    damage = int((((level_factor * attack * power // defense) // 50) + 2) * stab * type_effectiveness)
+    return damage
+
 #fetches pokemon by id
 def fetch_pokemon(pokemon_id):
     if int(pokemon_id) < 1 or int(pokemon_id) > 1025:
@@ -281,29 +288,34 @@ def fetch_move(move_id):
             if data["name"] not in valid_null_power_moves:
                 print("Move " + move_id + " has no power and does not have a scaling power.")
                 return -1
+            else:
+                if data["name"] == "frustration" or data["name"] == "return":
+                    data["power"] = 102
         if data["damage_class"]["name"] == "status":
                 print("Move " + move_id + " is a status move.")
                 return -1
+        if data["accuracy"] == None:
+            data["accuracy"] = 100
         
         #multihit move modifiers
         multihit_bonus = 1
         #moves that always hit twice
-        if data["move"]["name"] in ["bonemerang", "double-hit", "double-iron-bash", "double-kick", "dragon-darts", "dual-chop", "dual-wingbeat", "gear-grind", "tachyon-cutter", "twin-beam", "twineedle"]:
+        if data["name"] in ["bonemerang", "double-hit", "double-iron-bash", "double-kick", "dragon-darts", "dual-chop", "dual-wingbeat", "gear-grind", "tachyon-cutter", "twin-beam", "twineedle"]:
             multihit_bonus = 2
         #moves that always hit thrice
-        if data["move"]["name"] in ["surging-strikes", "triple-dive"]:
+        if data["name"] in ["surging-strikes", "triple-dive"]:
             multihit_bonus = 3
         #moves that on average hit 3.1 times
-        if data["move"]["name"] in ["arm-thrust", "barrage", "bone-rush", "bullet-seed", "comet-punch", "double-slap", "fury-attack", "fury-swipes", "icicle-spear", "pin-missile", "rock-blast", "scale-shot", "spike-cannon", "tail-slap", "water-shuriken"]:
+        if data["name"] in ["arm-thrust", "barrage", "bone-rush", "bullet-seed", "comet-punch", "double-slap", "fury-attack", "fury-swipes", "icicle-spear", "pin-missile", "rock-blast", "scale-shot", "spike-cannon", "tail-slap", "water-shuriken"]:
             multihit_bonus = 3.1
         #population bomb
-        if data["move"]["name"] in ["population-bomb"]:
+        if data["name"] in ["population-bomb"]:
             multihit_bonus = 5.8618940391
-        data["multihit_bonus"] = multihit_bonus
+        data["multihit_modifier"] = multihit_bonus
 
         #penalize the accuracy 2x
         accuracy_modifier = 100 - 2*(100 - data["accuracy"])
-        data["accuracy_modifier"] = accuracy_modifier
+        data["accuracy_modifier"] = accuracy_modifier / 100.0
 
         remove_keys = ["contest_combos", "contest_type", "contest_effect", "effect_changes", "generation", "learned_by_pokemon", "flavor_text_entries", "machines", "names", "past_values", "super_contest_effect"]
         for key in remove_keys:
@@ -356,7 +368,7 @@ def calculate_type_effectiveness(atk_type, def_type1, def_type2):
     type2_effectiveness = 1
     if def_type1 in type_effectiveness[atk_type]:
         type1_effectiveness = type_effectiveness[atk_type][def_type1]
-    if def_type2 in type_effectiveness[atk_type]:
+    if def_type2 in type_effectiveness[atk_type] and def_type2 != None:
         type2_effectiveness = type_effectiveness[atk_type][def_type2]
 
     return 1 * type1_effectiveness * type2_effectiveness
@@ -370,10 +382,12 @@ def calculate_damage(pokemon1_id, pokemon2_id):
     pokemon1_stats = calculate_stats(pokemon1_id)
     pokemon2_stats = calculate_stats(pokemon2_id)
     #calculate the best move for pokemon 1 to use
-    #damage calculator needs power, stab, type effectiveness
+    #damage calculator needs power
+    max_damage = 0
+    max_move = ""
     for move in pokemon1_data["moves"]:
         move_id = move["move"]["url"].rstrip("/").split("/")[-1]
-        move_data = fetch_move[move_id]
+        move_data = fetch_move(move_id)
         #status move or move that doesnt do damage
         if move_data == -1:
             continue
@@ -390,31 +404,65 @@ def calculate_damage(pokemon1_id, pokemon2_id):
         else:
             raise ValueError("Expected physical or special move. Recieved " + damage_class)
     
-    is_triple_axel = False
-    is_triple_kick = False
-    
-    #two moves that ramp up in power with each subsequent hit
-    if move["move"]["name"] == "triple-axel":
-        is_triple_axel = True
-    if move["move"]["name"] == "triple-kick":
-        is_triple_kick = True
+        is_triple_axel = False
+        is_triple_kick = False
+        
+        #two moves that ramp up in power with each subsequent hit
+        if move["move"]["name"] == "triple-axel":
+            is_triple_axel = True
+        if move["move"]["name"] == "triple-kick":
+            is_triple_kick = True
 
-    
+        type_effectiveness = 1
+        if len(pokemon2_data["types"]) == 2:
+            type_effectiveness = calculate_type_effectiveness(move_data["type"]["name"], pokemon2_data["types"][0]["type"]["name"], pokemon2_data["types"][1]["type"]["name"])
+        else:
+            type_effectiveness = calculate_type_effectiveness(move_data["type"]["name"], pokemon2_data["types"][0]["type"]["name"], None)
 
-    if is_triple_axel:
-        return
-    elif is_triple_kick:
-        return
-    else:
-        move["multihit_modifier"] * move["accuracy_modifier"]
+        stab = 1
+        for type in pokemon1_data["types"]:
+            if type["type"]["name"] == move_data["type"]["name"]:
+                stab = 1.5
+                break
 
+        power = move_data["power"]
+        if power == None:
+            match move["move"]["name"]:
+                case "grass-knot":
+                    if pokemon2_data["weight"] < 100:
+                        power = 20
+                    elif pokemon2_data["weight"] < 250:
+                        power = 40
+                    elif pokemon2_data["weight"] < 500:
+                        power = 60
+                    elif pokemon2_data["weight"] < 1000:
+                        power = 80
+                    elif pokemon2_data["weight"] < 2000:
+                        power = 100
+                    else:
+                        power = 120
 
+                    damage = (move_data["multihit_modifier"] * move_data["accuracy_modifier"] * calculate_move_damage(100, attacker_stat, defender_stat, power, type_effectiveness, stab)) / pokemon2_stats["hp"]
+                    if max_damage < damage:
+                        max_damage = damage
+                        move = move["move"]["name"]
+                case _:
+                    print(move["move"]["name"] + " has None power. Create an edge case to manually set.")
+        #WIP - ignored for now
+        elif is_triple_axel:
+            print("Triple Axel")
+        elif is_triple_kick:
+            print("Triple Kick")
+        else:
+            damage = (move_data["multihit_modifier"] * move_data["accuracy_modifier"] * calculate_move_damage(100, attacker_stat, defender_stat, power, type_effectiveness, stab)) / pokemon2_stats["hp"]
+            if max_damage < damage:
+                max_damage = damage
+                max_move = move["move"]["name"]
+    print("move " + max_move + " does max damage, dealing " + str(max_damage * 100) + "%% damage.")
 
 if __name__ == "__main__":
     #fetch all 1025 pokemon with ids 1 to 1025
-    fetch_pokemon("719")
-    calculate_stats("719")
-    fetch_move("4")
+    calculate_damage("3", "6")
     #diancie
     # fetch_pokemon("719")
     #fetch alternate forms with ids 10001 to 10325
