@@ -45,6 +45,12 @@ def fetch_pokemon(pokemon_id):
         #pokemon doesn't exist, return an error message
         raise re.exceptions.HTTPError("PokemonAPI endpoint not found. Name error. Error " + str(response.status_code))
 
+#completely overwrites existing json data.
+def replace_data(path, json_data):
+    if os.path.exists(path):
+        with open(path, "w") as f:
+            json.dump(json_data, f, indent=4)
+
 #fetches pokemon by id. Alt forms need to inherit some values from their base form.
 #need to be inherited: moves, abilities, 
 def fetch_alt_form_pokemon(pokemon_id):
@@ -115,14 +121,38 @@ def fetch_move(move_id):
             valid_null_power_moves = ["electro-ball", "frustration", "grass-knot", "gyro-ball", "heat-crash", "heavy-slam", "low-kick", "return"]
             if data["name"] not in valid_null_power_moves:
                 print("Move " + move_id + " has no power and does not have a scaling power.")
-                return
+                return -1
         if data["damage_class"]["name"] == "status":
                 print("Move " + move_id + " is a status move.")
-                return
+                return -1
+        
+        #multihit move modifiers
+        multihit_bonus = 1
+        #moves that always hit twice
+        if data["move"]["name"] in ["bonemerang", "double-hit", "double-iron-bash", "double-kick", "dragon-darts", "dual-chop", "dual-wingbeat", "gear-grind", "tachyon-cutter", "twin-beam", "twineedle"]:
+            multihit_bonus = 2
+        #moves that always hit thrice
+        if data["move"]["name"] in ["surging-strikes", "triple-dive"]:
+            multihit_bonus = 3
+        #moves that on average hit 3.1 times
+        if data["move"]["name"] in ["arm-thrust", "barrage", "bone-rush", "bullet-seed", "comet-punch", "double-slap", "fury-attack", "fury-swipes", "icicle-spear", "pin-missile", "rock-blast", "scale-shot", "spike-cannon", "tail-slap", "water-shuriken"]:
+            multihit_bonus = 3.1
+        #population bomb
+        if data["move"]["name"] in ["population-bomb"]:
+            multihit_bonus = 5.8618940391
+        data["multihit_bonus"] = multihit_bonus
+
+        #penalize the accuracy 2x
+        accuracy_modifier = 100 - 2*(100 - data["accuracy"])
+        data["accuracy_modifier"] = accuracy_modifier
 
         remove_keys = ["contest_combos", "contest_type", "contest_effect", "effect_changes", "generation", "learned_by_pokemon", "flavor_text_entries", "machines", "names", "past_values", "super_contest_effect"]
         for key in remove_keys:
             data.pop(key, None)
+
+        for entry in data["effect_entries"]:
+            if entry["language"]["name"] != "en":
+                data["effect_entries"].remove(entry)
 
         with open(path, "w") as f:
             json.dump(data, f, indent=4)
@@ -136,7 +166,11 @@ def fetch_move(move_id):
 #returns a dict
 def calculate_stats(pokemon_id):
     max_stats = {}
-    base_stats = fetch_pokemon(pokemon_id)["stats"]
+    pokemon_data = fetch_pokemon(pokemon_id)
+    if "max_stats" in pokemon_data.keys():
+        return pokemon_data["max_stats"]
+    base_stats = pokemon_data["stats"]
+
     for stat in base_stats:
         match stat["stat"]["name"]:
             case "hp":
@@ -153,13 +187,63 @@ def calculate_stats(pokemon_id):
                 max_stats["spe"] = 5 + (2*stat["base_stat"] + 31)
     if len(max_stats) < 6:
         raise ValueError("Some stats not found for pokemon with id " + str(pokemon_id) + ". Stats received: " + str(max_stats.keys()))
+    pokemon_data["max_stats"] = max_stats
+    path = os.path.join(CACHE_DIR, "pokemon_by_id", "pokemon_" + pokemon_id + ".json")
+    replace_data(path, pokemon_data)
     return max_stats
+
+def calculate_damage(pokemon1_id, pokemon2_id):
+    #general data
+    pokemon1_data = fetch_pokemon(pokemon1_id)
+    pokemon2_data = fetch_pokemon(pokemon2_id)
+
+    #stats
+    pokemon1_stats = calculate_stats(pokemon1_id)
+    pokemon2_stats = calculate_stats(pokemon2_id)
+    #calculate the best move for pokemon 1 to use
+    #damage calculator needs power, stab, type effectiveness
+    for move in pokemon1_data["moves"]:
+        move_id = move["move"]["url"].rstrip("/").split("/")[-1]
+        move_data = fetch_move[move_id]
+        #status move or move that doesnt do damage
+        if move_data == -1:
+            continue
+
+        damage_class = move_data["damage_class"]["name"]
+        attacker_stat = 0
+        defender_stat = 0
+        if damage_class == "physical":
+            attacker_stat = pokemon1_stats["atk"]
+            defender_stat = pokemon2_stats["def"]
+        elif damage_class == "special":
+            attacker_stat = pokemon1_stats["spa"]
+            defender_stat = pokemon2_stats["spd"]
+        else:
+            raise ValueError("Expected physical or special move. Recieved " + damage_class)
+    
+    is_triple_axel = False
+    is_triple_kick = False
+    
+    #two moves that ramp up in power with each subsequent hit
+    if move["move"]["name"] == "triple-axel":
+        is_triple_axel = True
+    if move["move"]["name"] == "triple-kick":
+        is_triple_kick = True
+
+    if is_triple_axel:
+        return
+    elif is_triple_kick:
+        return
+    else:
+        move["multihit_modifier"] * move["accuracy_modifier"]
+
+
 
 if __name__ == "__main__":
     #fetch all 1025 pokemon with ids 1 to 1025
-    print(calculate_stats("1"))
-    for x in range(1, 919):
-        fetch_move(str(x))
+    fetch_pokemon("719")
+    calculate_stats("719")
+    fetch_move("4")
     #diancie
     # fetch_pokemon("719")
     #fetch alternate forms with ids 10001 to 10325
