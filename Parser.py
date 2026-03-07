@@ -483,7 +483,13 @@ def calculate_damage(pokemon1_id, pokemon2_id):
                     if max_damage < damage:
                         max_damage = damage
                         move = move["move"]["name"]
+                case "gyro-ball":
+                    power = min(150, (25*(pokemon2_stats["spd"])/(pokemon1_stats["spe"])) + 1)
 
+                    damage = (move_data["multihit_modifier"] * move_data["accuracy_modifier"] * calculate_move_damage(100, attacker_stat, defender_stat, power, type_effectiveness, stab)) / pokemon2_stats["hp"]
+                    if max_damage < damage:
+                        max_damage = damage
+                        move = move["move"]["name"]
                 case _:
                     print(move["move"]["name"] + " has None power. Create an edge case to manually set.")
         #WIP - ignored for now
