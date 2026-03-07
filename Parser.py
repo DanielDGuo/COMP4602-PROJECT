@@ -1,5 +1,6 @@
 import requests as re
 import json, os
+import math
 
 base_url = "https://pokeapi.co/api/v2"
 CACHE_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "cache")
@@ -186,7 +187,7 @@ def fetch_pokemon(pokemon_id):
     #if it exists, it's been fetched before. Get the file from the cache instead of making an API request
     if os.path.exists(path):
         with open(path) as f:
-            print("file found in cache")
+            print("file for pokemon " + str(pokemon_id) + " found in cache")
             return json.load(f)
 
     #make an API request for the pokemon
@@ -272,8 +273,15 @@ def fetch_move(move_id):
     #if it exists, it's been fetched before. Get the file from the cache instead of making an API request
     if os.path.exists(path):
         with open(path) as f:
-            print("file found in cache")
-            return json.load(f)
+            data = json.load(f)
+            print("file for move " + str(move_id) + " found in cache")
+            if "is_status" in data.keys():
+                print("move " + str(move_id) + " is a status move. Ignored.")
+                return -1
+            if "is_weird_move" in data.keys():
+                print("move " + str(move_id) + " has None power and has a move that scales weirdly. Ignored.")
+                return -1
+            return data
 
     #make an API request for the pokemon
     print("file fetched")
@@ -285,17 +293,25 @@ def fetch_move(move_id):
         if data["power"] == None:
             #ignore status moves
             if data["damage_class"]["name"] == "status":
-                    print("Move " + move_id + " is a status move.")
-                    return -1
+                print("Move " + move_id + " is a status move.")
+                data = {}
+                data["is_status"] = True        
+                with open(path, "w") as f:
+                    json.dump(data, f, indent=4)
+                return -1
             # some moves that do deal damage have weird damage calculations. They do NOT appear in the list.
-            # WIP - change to match case and use all moves in here
             valid_null_power_moves = ["electro-ball", "frustration", "grass-knot", "gyro-ball", "heat-crash", "heavy-slam", "low-kick", "return"]
             if data["name"] not in valid_null_power_moves:
                 print("Move " + move_id + " has no power and does not have a scaling power.")
+                data = {}
+                data["is_weird_move"] = True        
+                with open(path, "w") as f:
+                    json.dump(data, f, indent=4)
                 return -1
             else:
                 if data["name"] == "frustration" or data["name"] == "return":
                     data["power"] = 102
+
         if data["accuracy"] == None:
             data["accuracy"] = 100
         
@@ -386,7 +402,9 @@ def calculate_damage(pokemon1_id, pokemon2_id):
     #calculate the best move for pokemon 1 to use
     #damage calculator needs power
     max_damage = 0
+    actual_max_damage = 0
     max_move = ""
+    max_move_accuracy = 0
     for move in pokemon1_data["moves"]:
         move_id = move["move"]["url"].rstrip("/").split("/")[-1]
         move_data = fetch_move(move_id)
@@ -448,6 +466,24 @@ def calculate_damage(pokemon1_id, pokemon2_id):
                     if max_damage < damage:
                         max_damage = damage
                         move = move["move"]["name"]
+                case "heavy-slam":
+                    weight_ratio = pokemon2_data["weight"] / pokemon1_data["weight"]
+                    if weight_ratio > 0.5:
+                        power = 40
+                    elif weight_ratio > 0.3334:
+                        power = 60
+                    elif weight_ratio > 0.25:
+                        power = 80
+                    elif weight_ratio > 20:
+                        power = 100
+                    else:
+                        power = 120
+
+                    damage = (move_data["multihit_modifier"] * move_data["accuracy_modifier"] * calculate_move_damage(100, attacker_stat, defender_stat, power, type_effectiveness, stab)) / pokemon2_stats["hp"]
+                    if max_damage < damage:
+                        max_damage = damage
+                        move = move["move"]["name"]
+
                 case _:
                     print(move["move"]["name"] + " has None power. Create an edge case to manually set.")
         #WIP - ignored for now
@@ -459,12 +495,47 @@ def calculate_damage(pokemon1_id, pokemon2_id):
             damage = (move_data["multihit_modifier"] * move_data["accuracy_modifier"] * calculate_move_damage(100, attacker_stat, defender_stat, power, type_effectiveness, stab)) / pokemon2_stats["hp"]
             if max_damage < damage:
                 max_damage = damage
+                actual_max_damage = (move_data["multihit_modifier"] * calculate_move_damage(100, attacker_stat, defender_stat, power, type_effectiveness, stab)) / pokemon2_stats["hp"]
                 max_move = move["move"]["name"]
-    print("move " + max_move + " does max damage, dealing " + str(max_damage * 100) + "%% damage.")
+                max_move_accuracy = move_data["accuracy"]
+                
+    path = os.path.join(CACHE_DIR, "matchups.json")
+    #create a base json file if needed
+    if not os.path.exists(path):
+        with open(path, "w") as f:
+            json.dump({}, f)  
+    with open(path, "r") as f:
+        data = json.load(f)
+        matchup_index = ""
+        ordered_pokeid1 = "-1"
+        ordered_pokeid2 = "-1"
+
+        if int(pokemon1_id) < int(pokemon2_id):
+            ordered_pokeid1 = pokemon1_id
+            ordered_pokeid2 = pokemon2_id
+        else:
+            ordered_pokeid1 = pokemon2_id
+            ordered_pokeid2 = pokemon1_id
+        matchup_index = str(ordered_pokeid1) + "_vs_" + str(ordered_pokeid2)
+
+        if not matchup_index in data.keys():
+            data[matchup_index] = {}
+        data[matchup_index]["pokemon_1_id"] = ordered_pokeid1
+        data[matchup_index]["pokemon_2_id"] = ordered_pokeid2
+        data[matchup_index][str(pokemon1_id)+"_best_move"] = max_move
+        data[matchup_index][str(pokemon1_id)+"_weighted_damage"] = max_damage
+        data[matchup_index][str(pokemon1_id)+"_expected_TTK"] = math.ceil(1 / max_damage)
+        data[matchup_index][str(pokemon1_id)+"_move_actual_damage"] = actual_max_damage
+        data[matchup_index][str(pokemon1_id)+"_move_accuracy"] = max_move_accuracy
+        replace_data(path, data)
+
+    print("move " + max_move + " has most weight, with a weighted damage of " + str(max_damage * 100) + "%.")
+    print("move actual damage: " + str(actual_max_damage * 100) + "%, accuracy: " + str(max_move_accuracy))
 
 if __name__ == "__main__":
     #fetch all 1025 pokemon with ids 1 to 1025
     calculate_damage("389", "9")
+    calculate_damage("9", "389")
     #diancie
     # fetch_pokemon("719")
     #fetch alternate forms with ids 10001 to 10325
