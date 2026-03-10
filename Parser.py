@@ -331,7 +331,11 @@ def fetch_move(move_id):
         if data["accuracy"] == None:
             data["accuracy"] = 100
 
-        ###BONUSES###
+
+
+
+
+        ###CALCULATE WEIGHT BONUSES AND PENALTIES###
         data["bonuses"] = {}
 
         charge_bonus = 1
@@ -415,6 +419,11 @@ def fetch_move(move_id):
         accuracy_bonus = 100 - 2*(100 - data["accuracy"])
         data["bonuses"]["accuracy_bonus"] = accuracy_bonus / 100.0
 
+        ###END OF WEIGHT BONUSES AND PENALTIES###
+
+
+
+
         remove_keys = ["contest_combos", "contest_type", "contest_effect", "effect_changes", "generation", "learned_by_pokemon", "flavor_text_entries", "machines", "names", "past_values", "super_contest_effect"]
         for key in remove_keys:
             data.pop(key, None)
@@ -443,7 +452,11 @@ def calculate_stats(pokemon_id):
     for stat in base_stats:
         match stat["stat"]["name"]:
             case "hp":
-                max_stats["hp"] = 110 + (2*stat["base_stat"] + 31)
+                #shedninja is the exception
+                if pokemon_id == "292":
+                    max_stats["hp"] = 1
+                else:
+                    max_stats["hp"] = 110 + (2*stat["base_stat"] + 31)
             case "attack":
                 max_stats["atk"] = 5 + (2*stat["base_stat"] + 31)
             case "defense":
