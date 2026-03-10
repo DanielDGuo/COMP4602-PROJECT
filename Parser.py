@@ -3,6 +3,7 @@ import json, os
 import math, time
 
 base_url = "https://pokeapi.co/api/v2"
+matchup_dict = {}
 CACHE_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "cache")
 
 type_effectiveness = {
@@ -268,7 +269,7 @@ def fetch_alt_form_pokemon(pokemon_id):
 #list of moves that should exist are here: https://bulbapedia.bulbagarden.net/wiki/List_of_moves_that_do_damage
 def fetch_move(move_id):
     if int(move_id) < 1 or int(move_id) > 919:
-        raise ValueError("Move ID must be between 1 and 919(Move 920 - 'Nihil Light' is not in PokeAPI.).")
+        raise ValueError("Move ID must be between 1 and 919(Move 920 - 'Nihil Light' is not in PokeAPI).")
     #fetch URL
     url = f"{base_url}/move/{move_id}"
     #create the cache directory for pokemon
@@ -752,70 +753,88 @@ def calculate_damage(pokemon1_id, pokemon2_id):
                 max_move = move["move"]["name"]
                 max_move_accuracy = move_data["accuracy"]
                 
-    path = os.path.join(CACHE_DIR, "matchups.json")
-    #create a base json file if needed
-    if not os.path.exists(path):
-        with open(path, "w") as f:
-            json.dump({}, f)  
-    with open(path, "r") as f:
-        data = json.load(f)
-        matchup_index = ""
-        ordered_pokeid1 = "-1"
-        ordered_pokeid2 = "-1"
+    matchup_index = ""
+    ordered_pokeid1 = "-1"
+    ordered_pokeid2 = "-1"
 
-        if int(pokemon1_id) < int(pokemon2_id):
-            ordered_pokeid1 = pokemon1_id
-            ordered_pokeid2 = pokemon2_id
-        else:
-            ordered_pokeid1 = pokemon2_id
-            ordered_pokeid2 = pokemon1_id
-        matchup_index = str(ordered_pokeid1) + "_vs_" + str(ordered_pokeid2)
+    if int(pokemon1_id) < int(pokemon2_id):
+        ordered_pokeid1 = pokemon1_id
+        ordered_pokeid2 = pokemon2_id
+    else:
+        ordered_pokeid1 = pokemon2_id
+        ordered_pokeid2 = pokemon1_id
+    matchup_index = str(ordered_pokeid1) + "_vs_" + str(ordered_pokeid2)
 
-        if not matchup_index in data.keys():
-            data[matchup_index] = {}
-        data[matchup_index]["pokemon_1_id"] = ordered_pokeid1
-        data[matchup_index]["pokemon_2_id"] = ordered_pokeid2
-        if max_damage != -1:
-            data[matchup_index][str(pokemon1_id)+"_name"] = pokemon1_data["name"]
-            data[matchup_index][str(pokemon1_id)+"_best_move"] = max_move
-            data[matchup_index][str(pokemon1_id)+"_weighted_damage"] = max_damage
-            data[matchup_index][str(pokemon1_id)+"_expected_TTK"] = math.ceil(1 / max_damage)
-            data[matchup_index][str(pokemon1_id)+"_move_actual_damage"] = actual_max_damage
-            data[matchup_index][str(pokemon1_id)+"_move_accuracy"] = max_move_accuracy
-        else:
-            print("Pokemon " + pokemon1_id + " seems to have no damaging moves. Check to ensure this is correct.")
-            # ditto, wynaut, waubuffet, smeargle, pyukumuku, cosmog, cosmoem (132 202 235 360 771 789 790)
-            data[matchup_index][str(pokemon1_id)+"_name"] = pokemon1_data["name"]
-            data[matchup_index][str(pokemon1_id)+"_best_move"] = None
-            data[matchup_index][str(pokemon1_id)+"_weighted_damage"] = None
-            data[matchup_index][str(pokemon1_id)+"_expected_TTK"] = None
-            data[matchup_index][str(pokemon1_id)+"_move_actual_damage"] = None
-            data[matchup_index][str(pokemon1_id)+"_move_accuracy"] = None
-        replace_data(path, data)
-
+    if not matchup_index in matchup_dict.keys():
+        matchup_dict[matchup_index] = {}
+    matchup_dict[matchup_index]["pokemon_1_id"] = ordered_pokeid1
+    matchup_dict[matchup_index]["pokemon_2_id"] = ordered_pokeid2
+    if max_damage != -1:
+        matchup_dict[matchup_index][str(pokemon1_id)+"_name"] = pokemon1_data["name"]
+        matchup_dict[matchup_index][str(pokemon1_id)+"_best_move"] = max_move
+        matchup_dict[matchup_index][str(pokemon1_id)+"_weighted_damage"] = max_damage
+        matchup_dict[matchup_index][str(pokemon1_id)+"_expected_TTK"] = math.ceil(1 / max_damage)
+        matchup_dict[matchup_index][str(pokemon1_id)+"_move_actual_damage"] = actual_max_damage
+        matchup_dict[matchup_index][str(pokemon1_id)+"_move_accuracy"] = max_move_accuracy
+    else:
+        # print("Pokemon " + pokemon1_id + " seems to have no damaging moves. Check to ensure this is correct.")
+        # ditto, wynaut, waubuffet, smeargle, pyukumuku, cosmog, cosmoem (132 202 235 360 771 789 790)
+        matchup_dict[matchup_index][str(pokemon1_id)+"_name"] = pokemon1_data["name"]
+        matchup_dict[matchup_index][str(pokemon1_id)+"_best_move"] = None
+        matchup_dict[matchup_index][str(pokemon1_id)+"_weighted_damage"] = None
+        matchup_dict[matchup_index][str(pokemon1_id)+"_expected_TTK"] = None
+        matchup_dict[matchup_index][str(pokemon1_id)+"_move_actual_damage"] = None
+        matchup_dict[matchup_index][str(pokemon1_id)+"_move_accuracy"] = None
     # print("move " + max_move + " has most weight, with a weighted damage of " + str(max_damage * 100) + "%.")
     # print("move actual damage: " + str(actual_max_damage * 100) + "%, accuracy: " + str(max_move_accuracy))
 
 if __name__ == "__main__":
-    #fetch all 1025 pokemon with ids 1 to 1025
+    path = os.path.join(CACHE_DIR, "matchups.json")
     start_time = time.perf_counter()
-    #normal pokemon
-    for i in range(1, 1026):
-        calculate_damage("3", str(i))
-        calculate_damage(str(i), "3")
-    #alt form pokemon
-    for i in range(10001, 10195):
-        calculate_damage("3", str(i))
-        calculate_damage(str(i), "3")
+
+    #get each matchup by getting all outgoing edges of all pokemon
     #skip gmax pokemon 10195-10228
     #skip mega pokemon 10278-10325
-    #get the rest of the alt forms
+    print("calculating normal pokemon moves")
+    for id1 in range(1, 1026):
+        pokemon_start_time = time.perf_counter()
+        #normal pokemon
+        for id2 in range(1, 1026):
+            calculate_damage(str(id1), str(id2))
+        #alt form pokemon
+        for id2 in range(10001, 10195):
+            calculate_damage(str(id1), str(id2))
+        pokemon_end_time = time.perf_counter()
+        execution_time = pokemon_end_time - pokemon_start_time
+        total_execution_time = pokemon_end_time - start_time
+        print(str(id1) + f" normal pokemon calculated out of 1025. Took {execution_time:.2f} seconds ({total_execution_time:.2f} total seconds elapsed).")
+        #save the data every 50 pokemon
+        if id1 % 10 == 0:
+            print("Dumping progress to file.")
+            with open(path, "w") as f:
+                json.dump(matchup_dict, f, indent=4)  
+        
+    print("calculating alt form pokemon moves")
+    for id1 in range(10001, 10195):
+        #normal pokemon
+        for id2 in range(1, 1026):
+            calculate_damage(str(id1), str(id2))
+        #alt form pokemon
+        for id2 in range(10001, 10195):
+            calculate_damage(str(id1), str(id2))
+        cur_time = time.perf_counter()
+        execution_time = cur_time - start_time
+        print(str(id1) + f" alt form pokemon calculated out of 194. Took {execution_time:.2f} seconds ({total_execution_time:.2f} total seconds elapsed).")
+        #save the data every 50 pokemon
+        if id1 % 10 == 0:
+            print("Dumping progress to file.")
+            with open(path, "w") as f:
+                json.dump(matchup_dict, f, indent=4)  
+
+    #dump the complete matchup dict to a file
+    with open(path, "w") as f:
+        json.dump(matchup_dict, f, indent=4)  
+
     end_time = time.perf_counter()
     execution_time = end_time - start_time
-    print(f"Execution time: {execution_time:.4f} seconds")
-    #diancie
-    # fetch_pokemon("719")
-    #fetch alternate forms with ids 10001 to 10325
-    #mega-diancie
-    # fetch_alt_form_pokemon("10075")
-    #need to store abilities, forms, id, moves, name, stats, type, weight
+    print(f"Execution time: {execution_time:.2f} seconds")
