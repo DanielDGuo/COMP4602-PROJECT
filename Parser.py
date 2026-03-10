@@ -361,7 +361,7 @@ def fetch_move(move_id):
         data["bonuses"]["always_crit_bonus"] = always_crit_bonus
 
         drain_bonus = 1
-        #handle movers that drain hp or have recoil damage
+        #handle moves that drain hp or have recoil damage
         if data["meta"] != None and data["meta"]["drain"] != 0:
             #half the penalty if it's recoil; controlled recoil
             if data["meta"]["drain"] < 0:
@@ -376,11 +376,24 @@ def fetch_move(move_id):
         data["bonuses"]["drain_bonus"] = drain_bonus
 
         crash_bonus = 1
-        #handle movers that crash on a miss
+        #handle moves that crash on a miss
         if data["name"] in ["axe-kick", "high-jump", "jump-kick", "supercell-slam"]:
             #on miss, always take damage equal to half the user hp
             crash_bonus = 1 - (0.5 * (100-data["accuracy"])/100.0)
         data["bonuses"]["crash_bonus"] = crash_bonus
+
+        consecutive_move_bonus = 1
+        #handle moves that lock you into using that move for a few turns
+        if data["name"] in ["ice-ball", "outrage", "petal-dance", "raging-fury", "rollout", "thrash", "uproar"]:
+            #negative as they're predictable and removes you ability to adapt
+            consecutive_move_bonus = 0.8
+            #decrease the bonus farther if it confuses the user at the end
+            if data["name"] in ["outrage", "petal-dance", "raging-fury", "thrash"]:
+                consecutive_move_bonus = 0.7
+            #increase the effective weight of moves that increase in power each turn theyre used. Still not good moves.
+            if data["name"] in ["ice-ball", "rollout"]:
+                consecutive_move_bonus = 1.5
+        data["bonuses"]["consecutive_move_bonus"] = consecutive_move_bonus
         
         #multihit move bonus
         multihit_bonus = 1
