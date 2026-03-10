@@ -808,10 +808,8 @@ if __name__ == "__main__":
         calculate_damage("3", str(i))
         calculate_damage(str(i), "3")
     #skip gmax pokemon 10195-10228
+    #skip mega pokemon 10278-10325
     #get the rest of the alt forms
-    for i in range(10229, 10326):
-        calculate_damage("3", str(i))
-        calculate_damage(str(i), "3")
     end_time = time.perf_counter()
     execution_time = end_time - start_time
     print(f"Execution time: {execution_time:.4f} seconds")
