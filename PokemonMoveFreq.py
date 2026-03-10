@@ -1,13 +1,13 @@
 import os, json
 
-CACHE_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "cache")
+OUTPUT_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "output")
 
 if __name__ == "__main__":
     pokemon_id = "3"
     moves_used_by = {}
     moves_used_against = {}
 
-    path = os.path.join(CACHE_DIR, "matchups.json")
+    path = os.path.join(OUTPUT_DIR, "matchups.json")
     with open(path) as f:
         data = json.load(f)
     for entry in data.keys():
