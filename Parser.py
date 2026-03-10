@@ -5,6 +5,7 @@ import math, time
 base_url = "https://pokeapi.co/api/v2"
 matchup_dict = {}
 CACHE_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "cache")
+OUTPUT_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "output")
 
 type_effectiveness = {
     "normal":{
@@ -789,7 +790,7 @@ def calculate_damage(pokemon1_id, pokemon2_id):
     # print("move actual damage: " + str(actual_max_damage * 100) + "%, accuracy: " + str(max_move_accuracy))
 
 if __name__ == "__main__":
-    path = os.path.join(CACHE_DIR, "matchups.json")
+    path = os.path.join(OUTPUT_DIR, "matchups.json")
     start_time = time.perf_counter()
 
     #get each matchup by getting all outgoing edges of all pokemon
