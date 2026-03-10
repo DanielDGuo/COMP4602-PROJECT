@@ -790,55 +790,59 @@ def calculate_damage(pokemon1_id, pokemon2_id):
     # print("move actual damage: " + str(actual_max_damage * 100) + "%, accuracy: " + str(max_move_accuracy))
 
 if __name__ == "__main__":
-    path = os.path.join(OUTPUT_DIR, "matchups.json")
     start_time = time.perf_counter()
 
-    #get each matchup by getting all outgoing edges of all pokemon
+    #get each matchup by getting all outgoing edges of all pokemon Takes ~30 seconds each pokemon
     #skip gmax pokemon 10195-10228
     #skip mega pokemon 10278-10325
     print("calculating normal pokemon moves")
     for id1 in range(1, 1026):
+        matchup_dict = {}
+        path = os.path.join(OUTPUT_DIR, "matchups_" + str(id1) + ".json")
         pokemon_start_time = time.perf_counter()
         #normal pokemon
         for id2 in range(1, 1026):
             calculate_damage(str(id1), str(id2))
+            calculate_damage(str(id2), str(id1))
         #alt form pokemon
         for id2 in range(10001, 10195):
             calculate_damage(str(id1), str(id2))
+            calculate_damage(str(id2), str(id1))
         pokemon_end_time = time.perf_counter()
         execution_time = pokemon_end_time - pokemon_start_time
         total_execution_time = pokemon_end_time - start_time
         print(str(id1) + f" normal pokemon calculated out of 1025. Took {execution_time:.2f} seconds ({total_execution_time:.2f} total seconds elapsed).")
-        #save the data every 50 pokemon
-        if id1 % 10 == 0:
-            dump_start = time.perf_counter()
-            print("Dumping progress to file.")
-            with open(path, "w") as f:
-                json.dump(matchup_dict, f, indent=4)  
-            dump_end = time.perf_counter()
-            dump_time = dump_end - dump_start
-            print(f"Took {execution_time:.2f} seconds ({dump_time:.2f} total seconds elapsed).")
+        
+        dump_start = time.perf_counter()
+        print("Dumping progress to file.")
+        with open(path, "w") as f:
+            json.dump(matchup_dict, f, indent=4)  
+        dump_end = time.perf_counter()
+        dump_time = dump_end - dump_start
+        print(f"Took {dump_time:.2f} seconds ({total_execution_time:.2f} total seconds elapsed).")
         
     print("calculating alt form pokemon moves")
     for id1 in range(10001, 10195):
+        path = os.path.join(OUTPUT_DIR, "matchups_" + str(id1) + ".json")
         #normal pokemon
         for id2 in range(1, 1026):
             calculate_damage(str(id1), str(id2))
+            calculate_damage(str(id2), str(id1))
         #alt form pokemon
         for id2 in range(10001, 10195):
             calculate_damage(str(id1), str(id2))
+            calculate_damage(str(id2), str(id1))
         cur_time = time.perf_counter()
         execution_time = cur_time - start_time
         print(str(id1) + f" alt form pokemon calculated out of 194. Took {execution_time:.2f} seconds ({total_execution_time:.2f} total seconds elapsed).")
-        #save the data every 50 pokemon
-        if id1 % 10 == 0:
-            dump_start = time.perf_counter()
-            print("Dumping progress to file.")
-            with open(path, "w") as f:
-                json.dump(matchup_dict, f, indent=4)  
-            dump_end = time.perf_counter()
-            dump_time = dump_end - dump_start
-            print(f"Took {dump_time:.2f} seconds ({total_execution_time:.2f} total seconds elapsed).")
+        
+        dump_start = time.perf_counter()
+        print("Dumping progress to file.")
+        with open(path, "w") as f:
+            json.dump(matchup_dict, f, indent=4)  
+        dump_end = time.perf_counter()
+        dump_time = dump_end - dump_start
+        print(f"Took {dump_time:.2f} seconds ({total_execution_time:.2f} total seconds elapsed).")
 
     #dump the complete matchup dict to a file
     with open(path, "w") as f:
