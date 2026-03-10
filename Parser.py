@@ -813,13 +813,8 @@ if __name__ == "__main__":
         total_execution_time = pokemon_end_time - start_time
         print(str(id1) + f" normal pokemon calculated out of 1025. Took {execution_time:.2f} seconds ({total_execution_time:.2f} total seconds elapsed).")
         
-        dump_start = time.perf_counter()
-        print("Dumping progress to file.")
         with open(path, "w") as f:
             json.dump(matchup_dict, f, indent=4)  
-        dump_end = time.perf_counter()
-        dump_time = dump_end - dump_start
-        print(f"Took {dump_time:.2f} seconds ({total_execution_time:.2f} total seconds elapsed).")
         
     print("calculating alt form pokemon moves")
     for id1 in range(10001, 10195):
@@ -836,13 +831,8 @@ if __name__ == "__main__":
         execution_time = cur_time - start_time
         print(str(id1) + f" alt form pokemon calculated out of 194. Took {execution_time:.2f} seconds ({total_execution_time:.2f} total seconds elapsed).")
         
-        dump_start = time.perf_counter()
-        print("Dumping progress to file.")
         with open(path, "w") as f:
             json.dump(matchup_dict, f, indent=4)  
-        dump_end = time.perf_counter()
-        dump_time = dump_end - dump_start
-        print(f"Took {dump_time:.2f} seconds ({total_execution_time:.2f} total seconds elapsed).")
 
     #dump the complete matchup dict to a file
     with open(path, "w") as f:
