@@ -386,6 +386,14 @@ def fetch_move(move_id):
             crash_bonus = 1 - (0.5 * (100-data["accuracy"])/100.0)
         data["bonuses"]["crash_bonus"] = crash_bonus
 
+        target_asleep_bonus = 1
+        #handle dream eater
+        if data["name"] == "dream-eater":
+            #REQUIRES the target to be asleep. Needs at a decent amount of work to prepare
+            target_asleep_bonus = 0.25
+        data["bonuses"]["target_asleep_bonus"] = target_asleep_bonus
+            
+
         consecutive_move_bonus = 1
         #handle moves that lock you into using that move for a few turns
         if data["name"] in ["ice-ball", "outrage", "petal-dance", "raging-fury", "rollout", "thrash", "uproar"]:
