@@ -204,7 +204,6 @@ def fetch_pokemon(pokemon_id):
         for move in data["moves"]:
             move.pop("version_group_details")
 
-
         with open(path, "w") as f:
             json.dump(data, f, indent=4)
         return data
@@ -301,7 +300,7 @@ def fetch_move(move_id):
         #handle moves with power that depend on other factors
         if data["power"] == None:
             # some moves that do deal damage have weird damage calculations. They do NOT appear in the list.
-            valid_null_power_moves = ["electro-ball", "frustration", "grass-knot", "gyro-ball", "heat-crash", "heavy-slam", "low-kick", "return"]
+            valid_null_power_moves = ["electro-ball", "frustration", "grass-knot", "gyro-ball", "heat-crash", "heavy-slam", "low-kick", "return", "fissure", "guillotine", "horn-drill", "sheer-cold"]
             if data["name"] not in valid_null_power_moves:
                 print("Move " + move_id + " has no power and does not have a scaling power.")
                 data = {}
@@ -309,8 +308,32 @@ def fetch_move(move_id):
                 with open(path, "w") as f:
                     json.dump(data, f, indent=4)
                 return -1
+            #catch friendship-based moves
             elif data["name"] == "frustration" or data["name"] == "return":
                     data["power"] = 102
+        #handle moves that cause the user to faint(lose)
+        if data["name"] in ["explosion", "misty-explosion", "self-destruct"]:
+                print("Move " + move_id + " causes the user to faint, and as such is ignored.")
+                data = {}
+                data["is_weird_move"] = True        
+                with open(path, "w") as f:
+                    json.dump(data, f, indent=4)
+                return -1
+        #handle moves that cause the user to faint(lose)
+        if data["name"] in ["fake-out", "upper-hand"]:
+                print("Move " + move_id + " can only be used as the first move. Ignored for simplicity.")
+                data = {}
+                data["is_weird_move"] = True        
+                with open(path, "w") as f:
+                    json.dump(data, f, indent=4)
+                return -1
+        #moves that always hit have what basically is 100 accuracy
+        if data["accuracy"] == None:
+            data["accuracy"] = 100
+
+        ###BONUSES###
+        data["bonuses"] = {}
+
         charge_bonus = 1
         #handle moves that require a vulnerable charging turn
         if data["name"] in ["electro-shot", "freeze-shock", "ice-burn", "meteor-beam", "razor-wind", "skull-bash", "sky-attack", "solar-beam", "solar-blade"]:
@@ -321,26 +344,45 @@ def fetch_move(move_id):
             #opponent can expect it coming
             charge_bonus = 0.45
         #sky drop is ignored; under thought-out circumstances, both sides lose a turn
-        data["charge_bonus"] = charge_bonus
+        data["bonuses"]["charge_bonus"] = charge_bonus
 
         recharge_bonus = 1
         #handle moves that require a recharge
         if data["name"] in ["blast-burn", "eternabeam", "frenzy-plant", "giga-impact", "hydro-cannon", "hyper-beam", "meteor-assault", "prismatic-laser", "roar-of-time", "rock-wrecker"]:
             #opponent has a free move after the move is used. Can't see it coming.
             recharge_bonus = 0.55
-        data["recharge_bonus"] = recharge_bonus
+        data["bonuses"]["recharge_bonus"] = recharge_bonus
 
         always_crit_bonus = 1
         #handle moves that always crit
         if data["name"] in ["flower-trick", "frost-breath", "storm-throw", "surging-strikes", "wicked-blow"]:
             #crits do 1.5x damage
             always_crit_bonus = 1.5
-        data["always_crit_bonus"] = recharge_bonus
+        data["bonuses"]["always_crit_bonus"] = always_crit_bonus
 
-        if data["accuracy"] == None:
-            data["accuracy"] = 100
+        drain_bonus = 1
+        #handle movers that drain hp or have recoil damage
+        if data["meta"] != None and data["meta"]["drain"] != 0:
+            #half the penalty if it's recoil; controlled recoil
+            if data["meta"]["drain"] < 0:
+                drain_bonus = 1 + ((data["meta"]["drain"]/100.0)/2.0)
+            #healing is always good
+            else:
+                drain_bonus = 1 + (data["meta"]["drain"]/100.0)
+        elif data["name"] == "chloroblast" or data["name"] == "steel-beam":
+            #catch chloroblast; always takes 50% recoil based on user max hp
+            #half the damage like other recoil moves even if its a constant
+            drain_bonus = 0.75
+        data["bonuses"]["drain_bonus"] = drain_bonus
+
+        crash_bonus = 1
+        #handle movers that crash on a miss
+        if data["name"] in ["axe-kick", "high-jump", "jump-kick", "supercell-slam"]:
+            #on miss, always take damage equal to half the user hp
+            crash_bonus = 1 - (0.5 * (100-data["accuracy"])/100.0)
+        data["bonuses"]["crash_bonus"] = crash_bonus
         
-        #multihit move modifiers
+        #multihit move bonus
         multihit_bonus = 1
         #moves that always hit twice
         if data["name"] in ["bonemerang", "double-hit", "double-iron-bash", "double-kick", "dragon-darts", "dual-chop", "dual-wingbeat", "gear-grind", "tachyon-cutter", "twin-beam", "twineedle"]:
@@ -354,11 +396,11 @@ def fetch_move(move_id):
         #population bomb
         if data["name"] in ["population-bomb"]:
             multihit_bonus = 5.8618940391
-        data["multihit_modifier"] = multihit_bonus
+        data["bonuses"]["multihit_bonus"] = multihit_bonus
 
         #penalize the accuracy 2x
-        accuracy_modifier = 100 - 2*(100 - data["accuracy"])
-        data["accuracy_modifier"] = accuracy_modifier / 100.0
+        accuracy_bonus = 100 - 2*(100 - data["accuracy"])
+        data["bonuses"]["accuracy_bonus"] = accuracy_bonus / 100.0
 
         remove_keys = ["contest_combos", "contest_type", "contest_effect", "effect_changes", "generation", "learned_by_pokemon", "flavor_text_entries", "machines", "names", "past_values", "super_contest_effect"]
         for key in remove_keys:
@@ -472,6 +514,7 @@ def calculate_damage(pokemon1_id, pokemon2_id):
 
         power = move_data["power"]
         if power == None:
+            damage = 0
             match move["move"]["name"]:
                 case "grass-knot":
                     if pokemon2_data["weight"] < 100:
@@ -487,10 +530,10 @@ def calculate_damage(pokemon1_id, pokemon2_id):
                     else:
                         power = 120
 
-                    damage = (move_data["multihit_modifier"] * move_data["accuracy_modifier"] * calculate_move_damage(100, attacker_stat, defender_stat, power, type_effectiveness, stab)) / pokemon2_stats["hp"]
-                    if max_damage < damage:
-                        max_damage = damage
-                        move = move["move"]["name"]
+                    bonus = 1
+                    for b in move_data["bonuses"]:
+                        bonus *= float(move_data["bonuses"][b])
+                    damage = (bonus * calculate_move_damage(100, attacker_stat, defender_stat, power, type_effectiveness, stab)) / pokemon2_stats["hp"]
                 case "low-kick":
                     if pokemon2_data["weight"] < 100:
                         power = 20
@@ -505,10 +548,10 @@ def calculate_damage(pokemon1_id, pokemon2_id):
                     else:
                         power = 120
 
-                    damage = (move_data["multihit_modifier"] * move_data["accuracy_modifier"] * calculate_move_damage(100, attacker_stat, defender_stat, power, type_effectiveness, stab)) / pokemon2_stats["hp"]
-                    if max_damage < damage:
-                        max_damage = damage
-                        move = move["move"]["name"]
+                    bonus = 1
+                    for b in move_data["bonuses"]:
+                        bonus *= float(move_data["bonuses"][b])
+                    damage = (bonus * calculate_move_damage(100, attacker_stat, defender_stat, power, type_effectiveness, stab)) / pokemon2_stats["hp"]
                 case "heavy-slam":
                     weight_ratio = pokemon2_data["weight"] / pokemon1_data["weight"]
                     if weight_ratio > 0.5:
@@ -522,10 +565,11 @@ def calculate_damage(pokemon1_id, pokemon2_id):
                     else:
                         power = 120
 
-                    damage = (move_data["multihit_modifier"] * move_data["accuracy_modifier"] * calculate_move_damage(100, attacker_stat, defender_stat, power, type_effectiveness, stab)) / pokemon2_stats["hp"]
-                    if max_damage < damage:
-                        max_damage = damage
-                        move = move["move"]["name"]
+                   
+                    bonus = 1
+                    for b in move_data["bonuses"]:
+                        bonus *= float(move_data["bonuses"][b])
+                    damage = (bonus * calculate_move_damage(100, attacker_stat, defender_stat, power, type_effectiveness, stab)) / pokemon2_stats["hp"]
                 case "heat-crash":
                     weight_ratio = pokemon2_data["weight"] / pokemon1_data["weight"]
                     if weight_ratio > 0.5:
@@ -539,17 +583,17 @@ def calculate_damage(pokemon1_id, pokemon2_id):
                     else:
                         power = 120
 
-                    damage = (move_data["multihit_modifier"] * move_data["accuracy_modifier"] * calculate_move_damage(100, attacker_stat, defender_stat, power, type_effectiveness, stab)) / pokemon2_stats["hp"]
-                    if max_damage < damage:
-                        max_damage = damage
-                        move = move["move"]["name"]
+                    bonus = 1
+                    for b in move_data["bonuses"]:
+                        bonus *= float(move_data["bonuses"][b])
+                    damage = (bonus * calculate_move_damage(100, attacker_stat, defender_stat, power, type_effectiveness, stab)) / pokemon2_stats["hp"]
                 case "gyro-ball":
                     power = min(150, (25*(pokemon2_stats["spe"])/(pokemon1_stats["spe"])) + 1)
 
-                    damage = (move_data["multihit_modifier"] * move_data["accuracy_modifier"] * calculate_move_damage(100, attacker_stat, defender_stat, power, type_effectiveness, stab)) / pokemon2_stats["hp"]
-                    if max_damage < damage:
-                        max_damage = damage
-                        move = move["move"]["name"]
+                    bonus = 1
+                    for b in move_data["bonuses"]:
+                        bonus *= float(move_data["bonuses"][b])
+                    damage = (bonus * calculate_move_damage(100, attacker_stat, defender_stat, power, type_effectiveness, stab)) / pokemon2_stats["hp"]
                 case "electro-ball":
                     spe_ratio = pokemon2_stats["spe"]/pokemon1_stats["spe"]
                     if spe_ratio > 1:
@@ -562,18 +606,52 @@ def calculate_damage(pokemon1_id, pokemon2_id):
                         power = 120
                     else:
                         power = 150
-
-                    damage = (move_data["multihit_modifier"] * move_data["accuracy_modifier"] * calculate_move_damage(100, attacker_stat, defender_stat, power, type_effectiveness, stab)) / pokemon2_stats["hp"]
+                    
+                    bonus = 1
+                    for b in move_data["bonuses"]:
+                        bonus *= float(move_data["bonuses"][b])
+                    damage = (bonus * calculate_move_damage(100, attacker_stat, defender_stat, power, type_effectiveness, stab)) / pokemon2_stats["hp"]
+                #OHKO moves hit 30% of the time -> penalize them heabily for being very inconsistent
+                case "fissure":
+                    damage = (0.15 * pokemon2_stats["hp"])/pokemon2_stats["hp"]
                     if max_damage < damage:
                         max_damage = damage
-                        move = move["move"]["name"]
+                        actual_max_damage = 1.0
+                        max_move = move["move"]["name"]
+                        max_move_accuracy = move_data["accuracy"]
+                case "guillotine":
+                    damage = (0.15 * pokemon2_stats["hp"])/pokemon2_stats["hp"]
+                    if max_damage < damage:
+                        max_damage = damage
+                        actual_max_damage = 1.0
+                        max_move = move["move"]["name"]
+                        max_move_accuracy = move_data["accuracy"]
+                case "horn-drill":
+                    damage = (0.15 * pokemon2_stats["hp"])/pokemon2_stats["hp"]
+                    if max_damage < damage:
+                        max_damage = damage
+                        actual_max_damage = 1.0
+                        max_move = move["move"]["name"]
+                        max_move_accuracy = move_data["accuracy"]
+                case "sheer-cold":
+                    damage = (0.15 * pokemon2_stats["hp"])/pokemon2_stats["hp"]
+                    if max_damage < damage:
+                        max_damage = damage
+                        actual_max_damage = 1.0
+                        max_move = move["move"]["name"]
+                        max_move_accuracy = move_data["accuracy"]
                 case _:
                     print(move["move"]["name"] + " has None power. Create an edge case to manually set.")
+            if max_damage < damage:
+                max_damage = damage
+                actual_max_damage = (move_data["bonuses"]["multihit_bonus"] * calculate_move_damage(100, attacker_stat, defender_stat, power, type_effectiveness, stab)) / pokemon2_stats["hp"]
+                max_move = move["move"]["name"]
+                max_move_accuracy = move_data["accuracy"]
         #expected damages for triple axel and kick
         elif is_triple_axel:
-            damage = (move_data["accuracy_modifier"] * calculate_move_damage(100, attacker_stat, defender_stat, 20, type_effectiveness, stab)) / pokemon2_stats["hp"] +\
-                        (move_data["accuracy_modifier"] * move_data["accuracy_modifier"] * calculate_move_damage(100, attacker_stat, defender_stat, 40, type_effectiveness, stab)) / pokemon2_stats["hp"] +\
-                        (move_data["accuracy_modifier"] * move_data["accuracy_modifier"] * move_data["accuracy_modifier"] * calculate_move_damage(100, attacker_stat, defender_stat, 60, type_effectiveness, stab)) / pokemon2_stats["hp"]
+            damage = (move_data["bonuses"]["accuracy_bonus"] * calculate_move_damage(100, attacker_stat, defender_stat, 20, type_effectiveness, stab)) / pokemon2_stats["hp"] +\
+                        (move_data["bonuses"]["accuracy_bonus"] * move_data["bonuses"]["accuracy_bonus"] * calculate_move_damage(100, attacker_stat, defender_stat, 40, type_effectiveness, stab)) / pokemon2_stats["hp"] +\
+                        (move_data["bonuses"]["accuracy_bonus"] * move_data["bonuses"]["accuracy_bonus"] * move_data["bonuses"]["accuracy_bonus"] * calculate_move_damage(100, attacker_stat, defender_stat, 60, type_effectiveness, stab)) / pokemon2_stats["hp"]
             if max_damage < damage:
                 max_damage = damage
                 actual_max_damage = (calculate_move_damage(100, attacker_stat, defender_stat, 20, type_effectiveness, stab)) / pokemon2_stats["hp"] +\
@@ -582,9 +660,9 @@ def calculate_damage(pokemon1_id, pokemon2_id):
                 max_move = move["move"]["name"]
                 max_move_accuracy = move_data["accuracy"]
         elif is_triple_kick:
-            damage = (move_data["accuracy_modifier"] * calculate_move_damage(100, attacker_stat, defender_stat, 10, type_effectiveness, stab)) / pokemon2_stats["hp"] +\
-                        (move_data["accuracy_modifier"] * move_data["accuracy_modifier"] * calculate_move_damage(100, attacker_stat, defender_stat, 20, type_effectiveness, stab)) / pokemon2_stats["hp"] +\
-                        (move_data["accuracy_modifier"] * move_data["accuracy_modifier"] * move_data["accuracy_modifier"] * calculate_move_damage(100, attacker_stat, defender_stat, 30, type_effectiveness, stab)) / pokemon2_stats["hp"]
+            damage = (move_data["bonuses"]["accuracy_bonus"] * calculate_move_damage(100, attacker_stat, defender_stat, 10, type_effectiveness, stab)) / pokemon2_stats["hp"] +\
+                        (move_data["bonuses"]["accuracy_bonus"] * move_data["bonuses"]["accuracy_bonus"] * calculate_move_damage(100, attacker_stat, defender_stat, 20, type_effectiveness, stab)) / pokemon2_stats["hp"] +\
+                        (move_data["bonuses"]["accuracy_bonus"] * move_data["bonuses"]["accuracy_bonus"] * move_data["bonuses"]["accuracy_bonus"] * calculate_move_damage(100, attacker_stat, defender_stat, 30, type_effectiveness, stab)) / pokemon2_stats["hp"]
             if max_damage < damage:
                 max_damage = damage
                 actual_max_damage = (calculate_move_damage(100, attacker_stat, defender_stat, 10, type_effectiveness, stab)) / pokemon2_stats["hp"] +\
@@ -594,10 +672,28 @@ def calculate_damage(pokemon1_id, pokemon2_id):
                 max_move_accuracy = move_data["accuracy"]
         #all normal moves
         else:
-            damage = (move_data["always_crit_bonus"] * move_data["charge_bonus"] * move_data["recharge_bonus"] * move_data["multihit_modifier"] * move_data["accuracy_modifier"] * calculate_move_damage(100, attacker_stat, defender_stat, power, type_effectiveness, stab)) / pokemon2_stats["hp"]
+            #check if the move can cause the target to flinch
+            flinch_bonus = 1
+            #can only flinch if you attack first; simplified to a speed check.
+            if pokemon1_stats["spe"] > pokemon2_stats["spe"]:
+                if move_data["meta"] != None and "flinch_chance" in move_data["meta"].keys() and int(move_data["meta"]["flinch_chance"]) > 0 and move_data["name"] != "double-iron-bash":
+                    flinch_bonus = 1 + int(move_data["meta"]["flinch_chance"])/100.0
+                #handle triple arrows
+                elif move_data["name"] == "triple-arrows":
+                    flinch_bonus = 1.3
+                #handle double-iron-bash; has 2 hits, so it has a 51% chance to flinch.
+                elif move_data["name"] == "triple-arrows":
+                    flinch_bonus = 1.51
+
+
+            bonus = flinch_bonus
+            for b in move_data["bonuses"]:
+                bonus *= float(move_data["bonuses"][b])
+            damage = (bonus * calculate_move_damage(100, attacker_stat, defender_stat, power, type_effectiveness, stab)) / pokemon2_stats["hp"]
             if max_damage < damage:
                 max_damage = damage
-                actual_max_damage = (move_data["multihit_modifier"] * calculate_move_damage(100, attacker_stat, defender_stat, power, type_effectiveness, stab)) / pokemon2_stats["hp"]
+                #multihit bonus is the only one to inccrease the maximum damage; others only effect the weight
+                actual_max_damage = (move_data["bonuses"]["multihit_bonus"] * calculate_move_damage(100, attacker_stat, defender_stat, power, type_effectiveness, stab)) / pokemon2_stats["hp"]
                 max_move = move["move"]["name"]
                 max_move_accuracy = move_data["accuracy"]
                 
