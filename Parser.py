@@ -222,6 +222,8 @@ def replace_data(path, json_data):
 def fetch_alt_form_pokemon(pokemon_id):
     if int(pokemon_id) < 10001 or int(pokemon_id) > 10325:
         raise ValueError("Pokemon alternate form ID must be between 10001 and 10325.")
+    if 10195 <= int(pokemon_id) and int(pokemon_id) <= 10228:
+        raise ValueError("Pokemon alternate form ID cannot be between 10195 and 10228.")
     #fetch URL
     url = f"{base_url}/pokemon/{pokemon_id}"
     #create the cache directory for pokemon
@@ -236,6 +238,12 @@ def fetch_alt_form_pokemon(pokemon_id):
             # print("file found in cache")
             return json.load(f)
 
+    if 10195 <= int(pokemon_id) and int(pokemon_id) <= 10228:
+        print("skipping fetch of GMAX pokemon")
+        data = -1
+        with open(path, "w") as f:
+            json.dump(data, f, indent=4)
+        return -1
     #make an API request for the pokemon
     print("file fetched")
     response = re.get(url)
@@ -452,7 +460,11 @@ def fetch_move(move_id):
 #returns a dict
 def calculate_stats(pokemon_id):
     max_stats = {}
-    pokemon_data = fetch_pokemon(pokemon_id)
+    pokemon_data = None
+    if int(pokemon_id) < 1026:
+        pokemon_data = fetch_pokemon(pokemon_id)
+    else:
+        pokemon_data = fetch_alt_form_pokemon(pokemon_id)
     if "max_stats" in pokemon_data.keys():
         return pokemon_data["max_stats"]
     base_stats = pokemon_data["stats"]
@@ -494,8 +506,17 @@ def calculate_type_effectiveness(atk_type, def_type1, def_type2):
 
 def calculate_damage(pokemon1_id, pokemon2_id):
     #general data
-    pokemon1_data = fetch_pokemon(pokemon1_id)
-    pokemon2_data = fetch_pokemon(pokemon2_id)
+    pokemon1_data = None
+    pokemon2_data = None
+    if int(pokemon1_id) < 1026:
+        pokemon1_data = fetch_pokemon(pokemon1_id)
+    else:
+        pokemon1_data = fetch_alt_form_pokemon(pokemon1_id)
+
+    if int(pokemon2_id) < 1026:
+        pokemon2_data = fetch_pokemon(pokemon2_id)
+    else:
+        pokemon2_data = fetch_alt_form_pokemon(pokemon2_id)
 
     #stats
     pokemon1_stats = calculate_stats(pokemon1_id)
@@ -762,8 +783,8 @@ def calculate_damage(pokemon1_id, pokemon2_id):
             data[matchup_index][str(pokemon1_id)+"_move_actual_damage"] = actual_max_damage
             data[matchup_index][str(pokemon1_id)+"_move_accuracy"] = max_move_accuracy
         else:
-            # print("Pokemon " + pokemon1_id + " seems to have no damaging moves. Check to ensure this is correct.")
-            # ditto, wynaut, waubuffet, smeargle, pyukumuku, cosmog, cosmoem
+            print("Pokemon " + pokemon1_id + " seems to have no damaging moves. Check to ensure this is correct.")
+            # ditto, wynaut, waubuffet, smeargle, pyukumuku, cosmog, cosmoem (132 202 235 360 771 789 790)
             data[matchup_index][str(pokemon1_id)+"_name"] = pokemon1_data["name"]
             data[matchup_index][str(pokemon1_id)+"_best_move"] = None
             data[matchup_index][str(pokemon1_id)+"_weighted_damage"] = None
@@ -778,7 +799,17 @@ def calculate_damage(pokemon1_id, pokemon2_id):
 if __name__ == "__main__":
     #fetch all 1025 pokemon with ids 1 to 1025
     start_time = time.perf_counter()
+    #normal pokemon
     for i in range(1, 1026):
+        calculate_damage("3", str(i))
+        calculate_damage(str(i), "3")
+    #alt form pokemon
+    for i in range(10001, 10195):
+        calculate_damage("3", str(i))
+        calculate_damage(str(i), "3")
+    #skip gmax pokemon 10195-10228
+    #get the rest of the alt forms
+    for i in range(10229, 10326):
         calculate_damage("3", str(i))
         calculate_damage(str(i), "3")
     end_time = time.perf_counter()
