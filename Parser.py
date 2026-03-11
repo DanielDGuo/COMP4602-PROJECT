@@ -337,6 +337,12 @@ def fetch_move(move_id):
                 with open(path, "w") as f:
                     json.dump(data, f, indent=4)
                 return -1
+        
+        #handle moves that cause the user to faint(lose)
+        if data["name"] in ["hidden-power", "ivy-cudgel", "aura-wheel", "judgement", "multi-attack", "raging-bull", "revelation-dance", "techno-blast", ""]:
+                print("Move " + move_id + " can be change type. Type effectiveness ignored.")
+                data["type"]["name"] = None
+        
         #moves that always hit have what basically is 100 accuracy
         if data["accuracy"] == None:
             data["accuracy"] = 100
@@ -497,6 +503,8 @@ def calculate_stats(pokemon_id):
     return max_stats
 
 def calculate_type_effectiveness(atk_type, def_type1, def_type2):
+    if atk_type == None:
+        return 1
     type1_effectiveness = 1
     type2_effectiveness = 1
     if def_type1 in type_effectiveness[atk_type]:
@@ -770,15 +778,21 @@ def calculate_damage(pokemon1_id, pokemon2_id):
         matchup_dict[matchup_index] = {}
     matchup_dict[matchup_index]["pokemon_1_id"] = ordered_pokeid1
     matchup_dict[matchup_index]["pokemon_2_id"] = ordered_pokeid2
-    if max_damage != -1:
+    if max_damage > 0:
         matchup_dict[matchup_index][str(pokemon1_id)+"_name"] = pokemon1_data["name"]
         matchup_dict[matchup_index][str(pokemon1_id)+"_best_move"] = max_move
         matchup_dict[matchup_index][str(pokemon1_id)+"_weighted_damage"] = max_damage
         matchup_dict[matchup_index][str(pokemon1_id)+"_expected_TTK"] = math.ceil(1 / max_damage)
         matchup_dict[matchup_index][str(pokemon1_id)+"_move_actual_damage"] = actual_max_damage
         matchup_dict[matchup_index][str(pokemon1_id)+"_move_accuracy"] = max_move_accuracy
+    elif max_damage == 0:
+        matchup_dict[matchup_index][str(pokemon1_id)+"_name"] = pokemon1_data["name"]
+        matchup_dict[matchup_index][str(pokemon1_id)+"_best_move"] = max_move
+        matchup_dict[matchup_index][str(pokemon1_id)+"_weighted_damage"] = max_damage
+        matchup_dict[matchup_index][str(pokemon1_id)+"_expected_TTK"] = None
+        matchup_dict[matchup_index][str(pokemon1_id)+"_move_actual_damage"] = actual_max_damage
+        matchup_dict[matchup_index][str(pokemon1_id)+"_move_accuracy"] = max_move_accuracy
     else:
-        # print("Pokemon " + pokemon1_id + " seems to have no damaging moves. Check to ensure this is correct.")
         # ditto, wynaut, waubuffet, smeargle, pyukumuku, cosmog, cosmoem (132 202 235 360 771 789 790)
         matchup_dict[matchup_index][str(pokemon1_id)+"_name"] = pokemon1_data["name"]
         matchup_dict[matchup_index][str(pokemon1_id)+"_best_move"] = None
@@ -790,6 +804,7 @@ def calculate_damage(pokemon1_id, pokemon2_id):
     # print("move actual damage: " + str(actual_max_damage * 100) + "%, accuracy: " + str(max_move_accuracy))
 
 if __name__ == "__main__":
+    os.makedirs(os.path.join(OUTPUT_DIR, "pokemon_by_id"), exist_ok=True)
     start_time = time.perf_counter()
 
     #get each matchup by getting all outgoing edges of all pokemon Takes ~30 seconds each pokemon
