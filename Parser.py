@@ -422,6 +422,13 @@ def fetch_move(move_id):
             if data["name"] in ["ice-ball", "rollout"]:
                 consecutive_move_bonus = 1.5
         data["bonuses"]["consecutive_move_bonus"] = consecutive_move_bonus
+
+        delayed_bonus = 1
+        #handle moves that lock you into using that move for a few turns
+        if data["name"] in ["future-sight", "doom-desire"]:
+            #negative as they're predictable
+            delayed_bonus = 0.8
+        data["bonuses"]["delayed_bonus"] = delayed_bonus
         
         #multihit move bonus
         multihit_bonus = 1
@@ -833,7 +840,9 @@ if __name__ == "__main__":
         
     print("calculating alt form pokemon moves")
     for id1 in range(10001, 10195):
+        matchup_dict = {}
         path = os.path.join(OUTPUT_DIR, "matchups_" + str(id1) + ".json")
+        pokemon_start_time = time.perf_counter()
         #normal pokemon
         for id2 in range(1, 1026):
             calculate_damage(str(id1), str(id2))
@@ -842,8 +851,9 @@ if __name__ == "__main__":
         for id2 in range(10001, 10195):
             calculate_damage(str(id1), str(id2))
             calculate_damage(str(id2), str(id1))
-        cur_time = time.perf_counter()
-        execution_time = cur_time - start_time
+        pokemon_end_time = time.perf_counter()
+        execution_time = pokemon_end_time - pokemon_start_time
+        total_execution_time = pokemon_end_time - start_time
         print(str(id1) + f" alt form pokemon calculated out of 194. Took {execution_time:.2f} seconds ({total_execution_time:.2f} total seconds elapsed).")
         
         with open(path, "w") as f:
