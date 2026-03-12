@@ -180,8 +180,10 @@ def calculate_move_damage(level, attack, defense, power, type_effectiveness, sta
 def fetch_pokemon(pokemon_id):
     if int(pokemon_id) < 1 or int(pokemon_id) > 1025:
         raise ValueError("Pokemon ID must be between 1 and 1025.")
-    #fetch URL
-    url = f"{base_url}/pokemon/{pokemon_id}"
+
+    if pokemon_id in pokemon_dict.keys():
+        return pokemon_dict[pokemon_id]
+    
     #create the cache directory for pokemon
     os.makedirs(os.path.join(CACHE_DIR, "pokemon_by_id"), exist_ok=True)
 
@@ -192,10 +194,13 @@ def fetch_pokemon(pokemon_id):
     if os.path.exists(path):
         with open(path) as f:
             # print("file for pokemon " + str(pokemon_id) + " found in cache")
-            return json.load(f)
+            pokemon_dict[pokemon_id] = json.load(f)
+            return pokemon_dict[pokemon_id]
 
     #make an API request for the pokemon
     print("file fetched for pokemon " + str(pokemon_id))
+    #fetch URL
+    url = f"{base_url}/pokemon/{pokemon_id}"
     response = re.get(url)
 
     if response.status_code == 200:
@@ -206,7 +211,8 @@ def fetch_pokemon(pokemon_id):
 
         with open(path, "w") as f:
             json.dump(data, f, indent=4)
-        return data
+        pokemon_dict[pokemon_id] = data
+        return pokemon_dict[pokemon_id]
     else:
         #pokemon doesn't exist, return an error message
         raise re.exceptions.HTTPError("PokemonAPI endpoint not found. Name error. Error " + str(response.status_code))
@@ -222,8 +228,10 @@ def replace_data(path, json_data):
 def fetch_alt_form_pokemon(pokemon_id):
     if int(pokemon_id) < 10001 or int(pokemon_id) > 10325:
         raise ValueError("Pokemon alternate form ID must be between 10001 and 10325.")
-    #fetch URL
-    url = f"{base_url}/pokemon/{pokemon_id}"
+    
+    if pokemon_id in pokemon_dict.keys():
+        return pokemon_dict[pokemon_id]
+    
     #create the cache directory for pokemon
     os.makedirs(os.path.join(CACHE_DIR, "pokemon_by_id"), exist_ok=True)
 
@@ -234,10 +242,13 @@ def fetch_alt_form_pokemon(pokemon_id):
     if os.path.exists(path):
         with open(path) as f:
             # print("file found in cache")
-            return json.load(f)
+            pokemon_dict[pokemon_id] = json.load(f)
+            return pokemon_dict[pokemon_id]
 
     #make an API request for the pokemon
     print("file fetched for pokemon " + str(pokemon_id))
+    #fetch URL
+    url = f"{base_url}/pokemon/{pokemon_id}"
     response = re.get(url)
 
     if response.status_code == 200:
@@ -248,7 +259,8 @@ def fetch_alt_form_pokemon(pokemon_id):
 
         with open(path, "w") as f:
             json.dump(data, f, indent=4)
-        return data
+        pokemon_dict[pokemon_id] = data
+        return pokemon_dict[pokemon_id]
     else:
         #pokemon doesn't exist, return an error message
         raise re.exceptions.HTTPError("PokemonAPI endpoint not found. Name error. Error " + str(response.status_code))
@@ -260,6 +272,9 @@ def fetch_alt_form_pokemon(pokemon_id):
 def fetch_move(move_id):
     if int(move_id) < 1 or int(move_id) > 919:
         raise ValueError("Move ID must be between 1 and 919(Move 920 - 'Nihil Light' is not in PokeAPI).")
+    
+    if move_id in moves_dict.keys():
+        return moves_dict[move_id]
     #fetch URL
     url = f"{base_url}/move/{move_id}"
     #create the cache directory for pokemon
@@ -279,7 +294,8 @@ def fetch_move(move_id):
             if "is_weird_move" in data.keys():
                 # print("move " + str(move_id) + " has None power and has a move that scales weirdly. Ignored.")
                 return -1
-            return data
+            moves_dict[move_id] = data
+            return moves_dict[move_id]
 
     #make an API request for the pokemon
     print("file fetched for move " + str(move_id))
@@ -483,7 +499,8 @@ def fetch_move(move_id):
 
         with open(path, "w") as f:
             json.dump(data, f, indent=4)
-        return data
+        moves_dict[move_id] = data
+        return moves_dict[move_id]
     else:
         #move id doesn't exist, return an error message
         raise re.exceptions.HTTPError("PokemonAPI endpoint not found. Name error. Error " + str(response.status_code))
