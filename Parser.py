@@ -672,7 +672,6 @@ def calculate_damage(pokemon1_id, pokemon2_id):
                     else:
                         power = 120
 
-                   
                     bonus = 1
                     for b in move_data["bonuses"]:
                         bonus *= float(move_data["bonuses"][b])
@@ -718,7 +717,7 @@ def calculate_damage(pokemon1_id, pokemon2_id):
                     for b in move_data["bonuses"]:
                         bonus *= float(move_data["bonuses"][b])
                     damage = (bonus * calculate_move_damage(100, attacker_stat, defender_stat, power, type_effectiveness, stab)) / pokemon2_stats["hp"]
-                #OHKO moves hit 30% of the time -> penalize them heabily for being very inconsistent
+                #OHKO moves hit 30% of the time -> penalize them heavily for being very inconsistent
                 case "fissure":
                     damage = (0.15 * pokemon2_stats["hp"])/pokemon2_stats["hp"]
                     if max_damage < damage:
@@ -754,6 +753,7 @@ def calculate_damage(pokemon1_id, pokemon2_id):
                 actual_max_damage = (move_data["bonuses"]["multihit_bonus"] * calculate_move_damage(100, attacker_stat, defender_stat, power, type_effectiveness, stab)) / pokemon2_stats["hp"]
                 max_move = move["move"]["name"]
                 max_move_accuracy = move_data["accuracy"]
+
         #expected damages for triple axel and kick
         elif is_triple_axel:
             damage = (move_data["bonuses"]["accuracy_bonus"] * calculate_move_damage(100, attacker_stat, defender_stat, 20, type_effectiveness, stab)) / pokemon2_stats["hp"] +\
@@ -777,6 +777,7 @@ def calculate_damage(pokemon1_id, pokemon2_id):
                                     (calculate_move_damage(100, attacker_stat, defender_stat, 30, type_effectiveness, stab)) / pokemon2_stats["hp"]
                 max_move = move["move"]["name"]
                 max_move_accuracy = move_data["accuracy"]
+        
         #all normal moves
         else:
             #check if the move can cause the target to flinch
@@ -803,8 +804,7 @@ def calculate_damage(pokemon1_id, pokemon2_id):
                 actual_max_damage = (move_data["bonuses"]["multihit_bonus"] * calculate_move_damage(100, attacker_stat, defender_stat, power, type_effectiveness, stab)) / pokemon2_stats["hp"]
                 max_move = move["move"]["name"]
                 max_move_accuracy = move_data["accuracy"]
-                
-    matchup_index = ""
+
     ordered_pokeid1 = "-1"
     ordered_pokeid2 = "-1"
 
@@ -814,6 +814,7 @@ def calculate_damage(pokemon1_id, pokemon2_id):
     else:
         ordered_pokeid1 = pokemon2_id
         ordered_pokeid2 = pokemon1_id
+    
     matchup_index = str(ordered_pokeid1) + "_vs_" + str(ordered_pokeid2)
 
     if not matchup_index in matchup_dict.keys():
@@ -828,6 +829,7 @@ def calculate_damage(pokemon1_id, pokemon2_id):
         matchup_dict[matchup_index][str(pokemon1_id)+"_move_actual_damage"] = actual_max_damage
         matchup_dict[matchup_index][str(pokemon1_id)+"_move_accuracy"] = max_move_accuracy
     elif max_damage == 0:
+        # pokemon have no damaging moves(e.g a pokemon that only knows normal moves against a ghost type)
         matchup_dict[matchup_index][str(pokemon1_id)+"_name"] = pokemon1_data["name"]
         matchup_dict[matchup_index][str(pokemon1_id)+"_best_move"] = max_move
         matchup_dict[matchup_index][str(pokemon1_id)+"_weighted_damage"] = max_damage
@@ -836,6 +838,7 @@ def calculate_damage(pokemon1_id, pokemon2_id):
         matchup_dict[matchup_index][str(pokemon1_id)+"_move_accuracy"] = max_move_accuracy
     else:
         # ditto, wynaut, waubuffet, smeargle, pyukumuku, cosmog, cosmoem (132 202 235 360 771 789 790)
+        # also includes some alt form pokemon who do not have move entries (e.g gmax, some megas)
         matchup_dict[matchup_index][str(pokemon1_id)+"_name"] = pokemon1_data["name"]
         matchup_dict[matchup_index][str(pokemon1_id)+"_best_move"] = None
         matchup_dict[matchup_index][str(pokemon1_id)+"_weighted_damage"] = None
