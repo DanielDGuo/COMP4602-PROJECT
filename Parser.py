@@ -890,7 +890,7 @@ if __name__ == "__main__":
         pokemon_end_time = time.perf_counter()
         execution_time = pokemon_end_time - pokemon_start_time
         total_execution_time = pokemon_end_time - start_time
-        print(str(id1) + f" alt form pokemon calculated out of 325. Took {execution_time:.2f} seconds ({total_execution_time:.2f} total seconds elapsed).")
+        print(str(id1 - 10000) + f" alt form pokemon calculated out of 325. Took {execution_time:.2f} seconds ({total_execution_time:.2f} total seconds elapsed).")
         
         with open(path, "w") as f:
             json.dump(matchup_dict, f, indent=4)  
