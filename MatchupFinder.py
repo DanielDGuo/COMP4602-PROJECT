@@ -1,5 +1,6 @@
 import os, json
 import requests as re
+import pprint
 
 base_url = "https://pokeapi.co/api/v2"
 CACHE_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "cache")
@@ -25,8 +26,8 @@ if __name__ == "__main__":
         data = json.load(f)
     
     if pokemon1_id + "_vs_" + pokemon2_id in data.keys():
-        print(data[pokemon1_id + "_vs_" + pokemon2_id])
+        pprint.pprint(data[pokemon1_id + "_vs_" + pokemon2_id])
     elif pokemon2_id + "_vs_" + pokemon1_id in data.keys():
-        print(data[pokemon2_id + "_vs_" + pokemon1_id])
+        pprint.pprint(data[pokemon2_id + "_vs_" + pokemon1_id])
     else:
         print("matchup not yet stored")

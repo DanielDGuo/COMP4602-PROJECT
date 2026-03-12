@@ -4,6 +4,8 @@ import math, time
 
 base_url = "https://pokeapi.co/api/v2"
 matchup_dict = {}
+pokemon_dict = {}
+moves_dict = {}
 CACHE_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "cache")
 OUTPUT_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "output")
 
@@ -193,18 +195,14 @@ def fetch_pokemon(pokemon_id):
             return json.load(f)
 
     #make an API request for the pokemon
-    print("file fetched")
+    print("file fetched for pokemon " + str(pokemon_id))
     response = re.get(url)
 
     if response.status_code == 200:
         #format the data before dumping it into the file
         data = response.json()
-        remove_keys = ["base_experience", "cries", "forms", "game_indices", "height", "held_items", "is_default", "location_area_encounters", "order", "past_abilities", "past_stats", "past_types", "sprites"]
-        for key in remove_keys:
+        for key in ["base_experience", "cries", "forms", "game_indices", "height", "held_items", "is_default", "location_area_encounters", "order", "past_abilities", "past_stats", "past_types", "sprites"]:
             data.pop(key, None)
-
-        for move in data["moves"]:
-            move.pop("version_group_details")
 
         with open(path, "w") as f:
             json.dump(data, f, indent=4)
@@ -224,8 +222,6 @@ def replace_data(path, json_data):
 def fetch_alt_form_pokemon(pokemon_id):
     if int(pokemon_id) < 10001 or int(pokemon_id) > 10325:
         raise ValueError("Pokemon alternate form ID must be between 10001 and 10325.")
-    if 10195 <= int(pokemon_id) and int(pokemon_id) <= 10228:
-        raise ValueError("Pokemon alternate form ID cannot be between 10195 and 10228.")
     #fetch URL
     url = f"{base_url}/pokemon/{pokemon_id}"
     #create the cache directory for pokemon
@@ -240,21 +236,14 @@ def fetch_alt_form_pokemon(pokemon_id):
             # print("file found in cache")
             return json.load(f)
 
-    if 10195 <= int(pokemon_id) and int(pokemon_id) <= 10228:
-        print("skipping fetch of GMAX pokemon")
-        data = -1
-        with open(path, "w") as f:
-            json.dump(data, f, indent=4)
-        return -1
     #make an API request for the pokemon
-    print("file fetched")
+    print("file fetched for pokemon " + str(pokemon_id))
     response = re.get(url)
 
     if response.status_code == 200:
         #format the data before dumping it into the file
         data = response.json()
-        remove_keys = ["base_experience", "cries", "forms", "game_indices", "height", "held_items", "is_default", "location_area_encounters", "order", "past_abilities", "past_stats", "past_types", "sprites"]
-        for key in remove_keys:
+        for key in ["base_experience", "cries", "forms", "game_indices", "height", "held_items", "is_default", "location_area_encounters", "order", "past_abilities", "past_stats", "past_types", "sprites"]:
             data.pop(key, None)
 
         with open(path, "w") as f:
@@ -293,7 +282,7 @@ def fetch_move(move_id):
             return data
 
     #make an API request for the pokemon
-    print("file fetched")
+    print("file fetched for move " + str(move_id))
     response = re.get(url)
 
     if response.status_code == 200:
@@ -329,8 +318,8 @@ def fetch_move(move_id):
                 with open(path, "w") as f:
                     json.dump(data, f, indent=4)
                 return -1
-        #handle moves that cause the user to faint(lose)
-        if data["name"] in ["fake-out", "upper-hand"]:
+        #handle moves that can only be used as the first move
+        if data["name"] in ["fake-out", "first-impression"]:
                 print("Move " + move_id + " can only be used as the first move. Ignored for simplicity.")
                 data = {}
                 data["is_weird_move"] = True        
@@ -351,7 +340,7 @@ def fetch_move(move_id):
 
 
 
-        ###CALCULATE WEIGHT BONUSES AND PENALTIES###
+        ### CALCULATE WEIGHT BONUSES AND PENALTIES ###
         data["bonuses"] = {}
 
         charge_bonus = 1
@@ -409,7 +398,6 @@ def fetch_move(move_id):
             target_asleep_bonus = 0.25
         data["bonuses"]["target_asleep_bonus"] = target_asleep_bonus
             
-
         consecutive_move_bonus = 1
         #handle moves that lock you into using that move for a few turns
         if data["name"] in ["ice-ball", "outrage", "petal-dance", "raging-fury", "rollout", "thrash", "uproar"]:
@@ -424,11 +412,42 @@ def fetch_move(move_id):
         data["bonuses"]["consecutive_move_bonus"] = consecutive_move_bonus
 
         delayed_bonus = 1
-        #handle moves that lock you into using that move for a few turns
+        #handle moves that occur in 2 turns
         if data["name"] in ["future-sight", "doom-desire"]:
             #negative as they're predictable
             delayed_bonus = 0.8
         data["bonuses"]["delayed_bonus"] = delayed_bonus
+
+        priority_bonus = 1
+        #handle moves that have modified priority
+        #positive priority moves strike first
+        #first impression, fake out was handled earlier
+        if data["name"] in ["water-shuriken", "wacuum-wave", "thunderclap", "sucker-punch", "feint", "upper-hand"]:
+            priority_bonus = 1.25
+            #thunderclap, sucker punch requires the enemy to be using an attack
+            if data["name"] in ["thunderclap", "sucker-punch"]:
+                priority_bonus = 1
+            #feint requires the opponent to have used protect or detect
+            if data["name"] in ["feint"]:
+                priority_bonus = 0.1
+            #feint requires the opponent to be using an increased priority move
+            if data["name"] in ["upper-hand"]:
+                priority_bonus = 0.2
+
+        #negative priority moves strike last
+        elif data["name"] in ["dragon-tail", "circle-throw", "avalanche", "shell-trap", "focus-punch", "beak-blast"]:
+            priority_bonus = 0.75
+            #avalanche double in power if the user was damaged(e.g if the opponent used an attack)
+            if data["name"] in ["avalanche"]:
+                priority_bonus = 1.4
+            #shell trap requries the user to be hit like avalanche
+            if data["name"] in ["avalanche"]:
+                priority_bonus = 0.7
+            #focus punch requires the user to NOT be hit
+            if data["name"] in ["focus-punch"]:
+                priority_bonus = 0.2
+
+        data["bonuses"]["priority_bonus"] = priority_bonus
         
         #multihit move bonus
         multihit_bonus = 1
@@ -450,13 +469,12 @@ def fetch_move(move_id):
         accuracy_bonus = 100 - 2*(100 - data["accuracy"])
         data["bonuses"]["accuracy_bonus"] = accuracy_bonus / 100.0
 
-        ###END OF WEIGHT BONUSES AND PENALTIES###
+        ### END OF WEIGHT BONUSES AND PENALTIES ###
 
 
 
 
-        remove_keys = ["contest_combos", "contest_type", "contest_effect", "effect_changes", "generation", "learned_by_pokemon", "flavor_text_entries", "machines", "names", "past_values", "super_contest_effect"]
-        for key in remove_keys:
+        for key in ["contest_combos", "contest_type", "contest_effect", "effect_changes", "generation", "learned_by_pokemon", "flavor_text_entries", "machines", "names", "past_values", "super_contest_effect"]:
             data.pop(key, None)
 
         for entry in data["effect_entries"]:
@@ -811,12 +829,10 @@ def calculate_damage(pokemon1_id, pokemon2_id):
     # print("move actual damage: " + str(actual_max_damage * 100) + "%, accuracy: " + str(max_move_accuracy))
 
 if __name__ == "__main__":
-    os.makedirs(os.path.join(OUTPUT_DIR, "pokemon_by_id"), exist_ok=True)
+    os.makedirs(OUTPUT_DIR, exist_ok=True)
     start_time = time.perf_counter()
 
     #get each matchup by getting all outgoing edges of all pokemon Takes ~30 seconds each pokemon
-    #skip gmax pokemon 10195-10228
-    #skip mega pokemon 10278-10325
     print("calculating normal pokemon moves")
     for id1 in range(1, 1026):
         matchup_dict = {}
@@ -827,7 +843,7 @@ if __name__ == "__main__":
             calculate_damage(str(id1), str(id2))
             calculate_damage(str(id2), str(id1))
         #alt form pokemon
-        for id2 in range(10001, 10195):
+        for id2 in range(10001, 10326):
             calculate_damage(str(id1), str(id2))
             calculate_damage(str(id2), str(id1))
         pokemon_end_time = time.perf_counter()
@@ -839,7 +855,7 @@ if __name__ == "__main__":
             json.dump(matchup_dict, f, indent=4)  
         
     print("calculating alt form pokemon moves")
-    for id1 in range(10001, 10195):
+    for id1 in range(10001, 10325):
         matchup_dict = {}
         path = os.path.join(OUTPUT_DIR, "matchups_" + str(id1) + ".json")
         pokemon_start_time = time.perf_counter()
@@ -848,13 +864,13 @@ if __name__ == "__main__":
             calculate_damage(str(id1), str(id2))
             calculate_damage(str(id2), str(id1))
         #alt form pokemon
-        for id2 in range(10001, 10195):
+        for id2 in range(10001, 10326):
             calculate_damage(str(id1), str(id2))
             calculate_damage(str(id2), str(id1))
         pokemon_end_time = time.perf_counter()
         execution_time = pokemon_end_time - pokemon_start_time
         total_execution_time = pokemon_end_time - start_time
-        print(str(id1) + f" alt form pokemon calculated out of 194. Took {execution_time:.2f} seconds ({total_execution_time:.2f} total seconds elapsed).")
+        print(str(id1) + f" alt form pokemon calculated out of 325. Took {execution_time:.2f} seconds ({total_execution_time:.2f} total seconds elapsed).")
         
         with open(path, "w") as f:
             json.dump(matchup_dict, f, indent=4)  
