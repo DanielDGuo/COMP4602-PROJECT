@@ -81,9 +81,11 @@ if __name__ == "__main__":
             point_array.append({"pokemon1_name": pokemon1_name,
                                 "pokemon_avg_edge_weight": (total_weight_difference/num_links)
                                 })
+    point_array.sort(key=lambda x: x["pokemon_avg_edge_weight"])
+    df = pd.DataFrame(point_array)
+    df.to_csv("pokemon_point_data.csv", index_label='point_index')
+
     df = pd.DataFrame(link_array)
     df.to_csv("pokemon_link_data.csv", index_label='link_index')
 
-    df = pd.DataFrame(point_array)
-    df.to_csv("pokemon_point_data.csv", index_label='point_index')
 
