@@ -343,7 +343,7 @@ def fetch_move(move_id):
                     json.dump(data, f, indent=4)
                 return -1
         
-        #handle moves that cause the user to faint(lose)
+        #handle moves that change type
         if data["name"] in ["hidden-power", "ivy-cudgel", "aura-wheel", "judgement", "multi-attack", "raging-bull", "revelation-dance", "techno-blast", ""]:
                 print("Move " + move_id + " can be change type. Type effectiveness ignored.")
                 data["type"]["name"] = None

@@ -7,8 +7,9 @@ CACHE_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "cache")
 OUTPUT_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "output")
 
 if __name__ == "__main__":
-    pokemon1_name = "doduo"
-    pokemon2_name = "staraptor-mega"
+    #search by name
+    pokemon1_name = ""
+    pokemon2_name = ""
 
     
     url = f"{base_url}/pokemon/{pokemon1_name}"
